@@ -46,8 +46,10 @@ Manual fallback (SideStore → Settings → Sources → `+` → paste):
 https://raw.githubusercontent.com/kyomufs/UniFlow/main/sidestore/source.json
 ```
 
-> Release maintainers: bump `sidestore/source.json` (`version`,
-> `versionDate`, `downloadURL`) on every tag so SideStore sees updates.
+> `sidestore/source.json` updates itself: right after each release is
+> published, `release.yml` rewrites `version`, `versionDate`,
+> `downloadURL` and `size` and pushes the change back to `main` — no
+> manual edits needed.
 
 ### Android
 
@@ -107,7 +109,8 @@ git tag -a v1.1.0 -m "UniFlow v1.1.0"
 git push origin v1.1.0
 ```
 
-Then update `sidestore/source.json` with the new version (see
+That is all — the release workflow also refreshes
+`sidestore/source.json` for the new version automatically (see
 Installation above).
 
 ## Project structure
