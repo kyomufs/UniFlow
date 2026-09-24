@@ -29,7 +29,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
-pubspec.lock
+# pubspec.lock is committed: this is an application, CI must resolve
+# the exact dependency set verified locally.
 
 # Symbolication related
 app.*.symbols
@@ -95,8 +96,9 @@ coverage/
 # Hive
 *.hive
 *.lock
-# Nix lock file must stay versioned for reproducible dev shells.
+# Locks that must stay versioned: Nix shell reproducibility + app dependencies.
 !flake.lock
+!pubspec.lock
 
 # Nix
 result
