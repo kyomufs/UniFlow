@@ -69,6 +69,15 @@ class ScheduleItem {
     return seconds <= 0 ? 0 : (seconds + 59) ~/ 60;
   }
 
+  /// Whole minutes until the lesson starts (rounded up; 0 when the
+  /// lesson is already running or over).
+  int minutesUntilStartAt(DateTime now) {
+    final start = startsAt;
+    if (start == null) return 0;
+    final seconds = start.difference(now).inSeconds;
+    return seconds <= 0 ? 0 : (seconds + 59) ~/ 60;
+  }
+
   (DateTime, DateTime)? _parseTimeRange() {
     final match =
         RegExp(r'(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})').firstMatch(time);
@@ -367,4 +376,12 @@ class CalendarItem {
     }
     return DateTime.tryParse(dateStr) ?? DateTime.now();
   }
+}
+
+/// Compact human-readable duration: "45 мин", "3 ч", "2 д".
+/// Shared by the "До начала/До конца пары" countdowns.
+String formatDurationShort(int minutes) {
+  if (minutes < 60) return '$minutes мин';
+  if (minutes < 24 * 60) return '${minutes ~/ 60} ч';
+  return '${minutes ~/ (24 * 60)} д';
 }

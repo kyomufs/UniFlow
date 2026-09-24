@@ -40,6 +40,17 @@ class LessonDetailSheet extends ConsumerWidget {
     final isOngoing = lesson.isOngoingAt(now);
     final minutesLeft = isOngoing ? lesson.minutesLeftAt(now) : 0;
 
+    // Countdown for today's lesson that hasn't started yet.
+    final startAt = lesson.startsAt;
+    final isUpcomingToday = !isOngoing &&
+        startAt != null &&
+        startAt.isAfter(now) &&
+        startAt.year == now.year &&
+        startAt.month == now.month &&
+        startAt.day == now.day;
+    final minutesUntilStart =
+        isUpcomingToday ? lesson.minutesUntilStartAt(now) : 0;
+
     // Latest journal entry describing exactly this lesson.
     final changeRecord = ref.watch(scheduleScreenProvider
         .select((s) => s.latestChangeFor(lesson.fingerprintRow)));
@@ -168,6 +179,11 @@ class LessonDetailSheet extends ConsumerWidget {
           if (isOngoing) ...[
             const Gap(14),
             _OngoingBanner(minutesLeft: minutesLeft),
+          ],
+
+          if (isUpcomingToday) ...[
+            const Gap(14),
+            _UpcomingBanner(minutesUntilStart: minutesUntilStart),
           ],
 
           const Gap(16),
@@ -323,6 +339,58 @@ class _OngoingBanner extends StatelessWidget {
           ),
           Icon(Icons.access_time,
               size: 18, color: colorScheme.onPrimaryContainer),
+        ],
+      ),
+    );
+  }
+}
+
+/// Banner shown before today's lesson starts: quiet secondary tonal
+/// card with a countdown to the start time.
+class _UpcomingBanner extends StatelessWidget {
+  final int minutesUntilStart;
+
+  const _UpcomingBanner({required this.minutesUntilStart});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.watch_later_outlined,
+              size: 20, color: colorScheme.onSecondaryContainer),
+          const Gap(10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Начнётся скоро',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Gap(2),
+                Text(
+                  'До начала пары '
+                  '${formatDurationShort(minutesUntilStart)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.access_time,
+              size: 18, color: colorScheme.onSecondaryContainer),
         ],
       ),
     );

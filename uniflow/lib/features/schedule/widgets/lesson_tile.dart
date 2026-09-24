@@ -50,6 +50,17 @@ class LessonTile extends ConsumerWidget {
       }
     }
 
+    // Upcoming today's lesson: countdown to its start (same tone of
+    // "time left" UX as the ongoing block, but quieter colors).
+    final isUpcomingToday = !isOngoing &&
+        startAt != null &&
+        startAt.isAfter(now) &&
+        startAt.year == now.year &&
+        startAt.month == now.month &&
+        startAt.day == now.day;
+    final minutesUntilStart =
+        isUpcomingToday ? item.minutesUntilStartAt(now) : 0;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -203,6 +214,13 @@ class LessonTile extends ConsumerWidget {
                           progress: lessonProgress,
                         ),
                       ],
+                      // Countdown to today's upcoming lesson start
+                      if (isUpcomingToday) ...[
+                        const Gap(8),
+                        _UpcomingCountdown(
+                          minutesUntilStart: minutesUntilStart,
+                        ),
+                      ],
                       // Groups (only for full-size tile)
                       if (!isCompact && item.groups.isNotEmpty) ...[
                         const Gap(8),
@@ -308,6 +326,46 @@ class _OngoingCountdown extends StatelessWidget {
               backgroundColor:
                   colorScheme.onPrimaryContainer.withValues(alpha: 0.15),
               color: colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tonal countdown block shown under the teacher while today's lesson
+/// hasn't started yet: clock icon + "До начала пары" label (secondary
+/// tonal colors — quieter than the ongoing primary card).
+class _UpcomingCountdown extends StatelessWidget {
+  final int minutesUntilStart;
+
+  const _UpcomingCountdown({required this.minutesUntilStart});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.watch_later_outlined,
+              size: 15, color: colorScheme.onSecondaryContainer),
+          const Gap(6),
+          Expanded(
+            child: Text(
+              'До начала пары — '
+              '${formatDurationShort(minutesUntilStart)}',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSecondaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

@@ -28,7 +28,32 @@ tracking — all wrapped in a Material You (MD3) UI with dynamic theming.
 - 🎨 **Material You** — dynamic color from a seed color, light/dark themes,
   M3 components (NavigationBar, SegmentedButton, Fitted type scale)
 - 🔔 **Notifications** — alerts for schedule changes
+- 🚀 **Self-updater (Android)** — checks GitHub releases on launch and
+  offers a one-tap update with a download progress bar
 - 📴 **Local-first** — Hive storage, no account required
+
+## Installation
+
+### iOS — SideStore
+
+Tap the link on a device with SideStore installed to add the source:
+
+**[Add UniFlow to SideStore](sidestore://source?url=https://raw.githubusercontent.com/kyomufs/UniFlow/main/sidestore/source.json)**
+
+Manual fallback (SideStore → Settings → Sources → `+` → paste):
+
+```
+https://raw.githubusercontent.com/kyomufs/UniFlow/main/sidestore/source.json
+```
+
+> Release maintainers: bump `sidestore/source.json` (`version`,
+> `versionDate`, `downloadURL`) on every tag so SideStore sees updates.
+
+### Android
+
+Grab `UniFlow-<tag>.apk` from
+[Releases](https://github.com/kyomufs/UniFlow/releases), or install an
+older build and let the in-app updater offer the new one.
 
 ## Platforms
 
@@ -81,6 +106,9 @@ Cut a release:
 git tag -a v1.1.0 -m "UniFlow v1.1.0"
 git push origin v1.1.0
 ```
+
+Then update `sidestore/source.json` with the new version (see
+Installation above).
 
 ## Project structure
 

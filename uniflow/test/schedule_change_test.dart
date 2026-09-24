@@ -52,7 +52,8 @@ class FakeScheduleService implements ScheduleService {
       getSchedule(searchValue);
 
   @override
-  List<ScheduleItem> getScheduleForDate(List<ScheduleItem> items, DateTime date) =>
+  List<ScheduleItem> getScheduleForDate(
+          List<ScheduleItem> items, DateTime date) =>
       [];
 
   @override
@@ -163,7 +164,9 @@ void main() {
     final storage = FakeStorage();
     final notifications = FakeNotifications();
 
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
 
@@ -178,13 +181,17 @@ void main() {
     final notifications = FakeNotifications();
 
     // First open: stores the baseline for "Алгебра".
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
     expect(notifications.shownIds, isEmpty);
 
     // Second open with byte-identical data.
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
 
@@ -197,7 +204,9 @@ void main() {
     final notifications = FakeNotifications();
 
     // First open: baseline for "Алгебра".
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
     expect(notifications.shownIds, isEmpty);
@@ -218,36 +227,28 @@ void main() {
         reason: 'baseline moves forward after the alert');
   });
 
-  test('changed schedule marks modified, new and cancelled lessons',
-      () async {
+  test('changed schedule marks modified, new and cancelled lessons', () async {
     final storage = FakeStorage();
     final notifications = FakeNotifications();
 
     // Baseline: Алгебра (a.101) + Геометрия.
-    _notifier(
-        data: [
-          _item('Алгебра'),
-          _item('Геометрия', time: '09:45 - 11:15'),
-        ],
-        storage: storage,
-        notifications: notifications);
+    _notifier(data: [
+      _item('Алгебра'),
+      _item('Геометрия', time: '09:45 - 11:15'),
+    ], storage: storage, notifications: notifications);
     await _flush();
     expect(notifications.shownIds, isEmpty);
 
     // University moved Алгебра to a.102, cancelled Геометрия,
     // added Тригонометрия.
-    final notifier = _notifier(
-        data: [
-          _item('Алгебра', classroom: '102'),
-          _item('Тригонометрия', time: '12:00 - 13:30'),
-        ],
-        storage: storage,
-        notifications: notifications);
+    final notifier = _notifier(data: [
+      _item('Алгебра', classroom: '102'),
+      _item('Тригонометрия', time: '12:00 - 13:30'),
+    ], storage: storage, notifications: notifications);
     await _flush();
 
     expect(notifications.shownIds, [2]);
-    expect(notifier.state.changeNotes.values,
-        contains('Аудитория: 101 → 102'));
+    expect(notifier.state.changeNotes.values, contains('Аудитория: 101 → 102'));
     expect(notifier.state.changeNotes.values, contains('Новое занятие'));
     expect(notifier.state.removedLessons.single, contains('Геометрия'));
   });
@@ -276,7 +277,9 @@ void main() {
     final storage = FakeStorage();
     final notifications = FakeNotifications();
 
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
     expect(notifications.shownIds, isEmpty);
@@ -313,7 +316,9 @@ void main() {
     // date|time|subject|classroom|type.
     storage.fingerprint = '23.09.2026|08:00 - 09:30|Алгебра|101|Лекции';
 
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
 
@@ -327,12 +332,16 @@ void main() {
     final storage = FakeStorage();
     final notifications = FakeNotifications();
 
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
     expect(storage.changeLog, isEmpty);
 
-    _notifier(data: [_item('Геометрия')], storage: storage,
+    _notifier(
+        data: [_item('Геометрия')],
+        storage: storage,
         notifications: notifications);
     await _flush();
 
@@ -348,12 +357,15 @@ void main() {
     final storage = FakeStorage();
     final notifications = FakeNotifications();
 
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
 
     final notifier = _notifier(
-        data: [_item('Геометрия')], storage: storage,
+        data: [_item('Геометрия')],
+        storage: storage,
         notifications: notifications);
     await _flush();
     expect(notifier.state.hasUnseenChanges, isTrue);
@@ -369,7 +381,8 @@ void main() {
 
     // A reopened instance restores the journal from storage.
     final reopened = _notifier(
-        data: [_item('Геометрия')], storage: storage,
+        data: [_item('Геометрия')],
+        storage: storage,
         notifications: notifications);
     await _flush();
     expect(reopened.state.changeJournal, isNotEmpty);
@@ -381,11 +394,14 @@ void main() {
     final storage = FakeStorage();
     final notifications = FakeNotifications();
 
-    _notifier(data: [_item('Алгебра')], storage: storage,
+    _notifier(
+        data: [_item('Алгебра')],
+        storage: storage,
         notifications: notifications);
     await _flush();
     final notifier = _notifier(
-        data: [_item('Геометрия')], storage: storage,
+        data: [_item('Геометрия')],
+        storage: storage,
         notifications: notifications);
     await _flush();
     expect(notifier.state.changeJournal, isNotEmpty);
@@ -398,8 +414,7 @@ void main() {
 
   test('journal prune enforces the 50-entry cap and 14-day TTL', () async {
     final now = DateTime(2026, 9, 23, 12);
-    ChangeRecord rec(DateTime at, {String subject = 'Алгебра'}) =>
-        ChangeRecord(
+    ChangeRecord rec(DateTime at, {String subject = 'Алгебра'}) => ChangeRecord(
           detectedAt: at,
           kind: ChangeKind.added,
           date: '23.09.2026',
@@ -439,8 +454,7 @@ void main() {
     expect(service.getScheduleCalls, 0, reason: 'demo never calls the API');
     expect(storage.fingerprint, isNull,
         reason: 'demo must not overwrite the real baseline');
-    expect(storage.changeLog, isEmpty,
-        reason: 'demo journal is memory-only');
+    expect(storage.changeLog, isEmpty, reason: 'demo journal is memory-only');
     expect(notifier.state.isDemo, isTrue);
     expect(notifier.state.schedule.items, isNotEmpty);
     expect(notifier.state.changeJournal, isNotEmpty);

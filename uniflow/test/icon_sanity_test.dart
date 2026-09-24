@@ -1,10 +1,11 @@
-// Temporary sanity check for generated icons: samples a few pixels.
+// Sanity check for generated icons: samples pixels of the new design
+// (brand gradient + white university glyph).
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 
-Future<({int r, int g, int b})> pixel(String path, int x, int y) async {
+Future<({int r, int g, int b, int a})> pixel(String path, int x, int y) async {
   final bytes = File(path).readAsBytesSync();
   final codec = await ui.instantiateImageCodec(bytes);
   final frame = await codec.getNextFrame();
@@ -14,7 +15,30 @@ Future<({int r, int g, int b})> pixel(String path, int x, int y) async {
     r: data!.getUint8(i),
     g: data.getUint8(i + 1),
     b: data.getUint8(i + 2),
+    a: data.getUint8(i + 3),
   );
+}
+
+/// Counts near-white pixels on a sparse grid (the glyph is white).
+Future<int> countWhite(String path) async {
+  final bytes = File(path).readAsBytesSync();
+  final codec = await ui.instantiateImageCodec(bytes);
+  final frame = await codec.getNextFrame();
+  final data =
+      (await frame.image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+  final w = frame.image.width;
+  var white = 0;
+  for (var y = 0; y < w; y += 8) {
+    for (var x = 0; x < w; x += 8) {
+      final i = (y * w + x) * 4;
+      if (data.getUint8(i) > 220 &&
+          data.getUint8(i + 1) > 220 &&
+          data.getUint8(i + 2) > 220) {
+        white++;
+      }
+    }
+  }
+  return white;
 }
 
 void main() {
@@ -23,14 +47,19 @@ void main() {
         'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png';
     final topLeft = await pixel(path, 8, 8);
     final bottomRight = await pixel(path, 1015, 1015);
-    final rowWhite = await pixel(path, 300, 348); // inside first white row
-    final glyphGap = await pixel(path, 512, 420); // between rows: background
-    final dot = await pixel(path, 744, 348); // accent dot
-    stdout.writeln('topLeft=$topLeft (expect ~103,80,164)');
+    stdout.writeln('topLeft=$topLeft (expect ~123,103,176)');
     stdout.writeln('bottomRight=$bottomRight (expect ~59,70,205)');
-    stdout.writeln('rowWhite=$rowWhite (expect ~255,255,255)');
-    stdout.writeln('glyphGap=$glyphGap (gradient, dark purple-blue)');
-    stdout.writeln('dot=$dot (expect ~255,214,231)');
+
+    // Gradient start (with highlight) top-left and end bottom-right.
+    expect(topLeft.r, inInclusiveRange(90, 160));
+    expect(topLeft.g, inInclusiveRange(70, 140));
+    expect(bottomRight.b, inInclusiveRange(190, 215));
+    expect(bottomRight.r, inInclusiveRange(45, 75));
+
+    // The white university glyph must be present in quantity.
+    final white = await countWhite(path);
+    stdout.writeln('white samples: $white (grid stride8, expect > 100)');
+    expect(white, greaterThan(100));
 
     // Alpha channel must be opaque everywhere (App Store requirement).
     final bytes = File(path).readAsBytesSync();
@@ -44,5 +73,16 @@ void main() {
     }
     stdout.writeln('non-opaque pixels: $transparent');
     expect(transparent, 0);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  test('adaptive foreground: transparent bg, white glyph', () async {
+    const path = 'android/app/src/main/res/drawable/ic_launcher_foreground.png';
+    final corner = await pixel(path, 2, 2);
+    stdout.writeln('foreground corner=$corner (expect alpha0)');
+    expect(corner.a, 0);
+
+    final white = await countWhite(path);
+    stdout.writeln('foreground white samples: $white (expect > 40)');
+    expect(white, greaterThan(40));
   }, timeout: const Timeout(Duration(minutes: 2)));
 }

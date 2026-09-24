@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "ru.tulsu.uniflow"
+    namespace = "com.kyomufs.uniflow"
     compileSdk = 36
     ndkVersion = "29.0.14206865"
 
@@ -16,7 +16,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ru.tulsu.uniflow"
+        applicationId = "com.kyomufs.uniflow"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

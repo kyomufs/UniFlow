@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:uniflow/core/services/notification_service.dart';
 import 'package:uniflow/core/services/storage_service.dart';
+import 'package:uniflow/core/services/update_service.dart';
 import 'package:uniflow/core/theme/theme_provider.dart';
+import 'package:uniflow/core/widgets/update_dialog.dart';
 import 'package:uniflow/features/schedule/screens/schedule_screen.dart';
 import 'package:uniflow/features/notes/screens/notes_screen.dart';
 import 'package:uniflow/features/performance/screens/performance_screen.dart';
@@ -63,11 +68,32 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
+  final _updateService = UpdateService();
+
   @override
   void initState() {
     super.initState();
     // Ask for the notification permission once the first frame is up.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _setupNotifications());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupNotifications();
+      _checkForUpdate();
+    });
+  }
+
+  /// Android in-app updater: check the GitHub latest release once per
+  /// start and offer the new version when online. Any failure (offline,
+  /// private repo, rate limit) is silent — never blocks startup.
+  Future<void> _checkForUpdate() async {
+    if (!Platform.isAndroid || !mounted) return;
+    try {
+      final info = await _updateService.check();
+      if (info == null || !mounted) return;
+      final package = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      showUpdateDialog(context, _updateService, info, package.version);
+    } catch (_) {
+      // Offline / API unavailable — nothing to show.
+    }
   }
 
   Future<void> _setupNotifications() async {
@@ -92,6 +118,18 @@ class _MainShellState extends ConsumerState<MainShell> {
     final currentTab = ref.watch(currentTabProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
+    // Keep system bars aligned with the APP theme (the user may run the
+    // app dark while the system is light): the gesture/system strip under
+    // the navigation bar must follow the seed color like everything else.
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: colorScheme.surfaceContainerLow,
+      systemNavigationBarIconBrightness:
+          colorScheme.brightness == Brightness.light
+              ? Brightness.dark
+              : Brightness.light,
+    ));
+
     return Scaffold(
       body: IndexedStack(
         index: currentTab,
@@ -99,69 +137,53 @@ class _MainShellState extends ConsumerState<MainShell> {
       ),
       // Solid bar, no floating rounded container: full-width surface color
       // with a tonal indicator pill, like Gmail's bottom navigation.
-      // One tinted block holds the bar and the system gesture inset below
-      // it, so the color is continuous to the screen edge: no white strip
-      // above the bar and no floating gap under it (iOS home indicator).
-      bottomNavigationBar: Builder(
-        builder: (context) {
-          final inset = MediaQuery.of(context).viewPadding.bottom;
-          return Container(
-            color: colorScheme.surfaceContainerLow,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                NavigationBar(
-                  selectedIndex: currentTab,
-                  onDestinationSelected: (index) {
-                    HapticFeedback.lightImpact();
-                    ref.read(currentTabProvider.notifier).state = index;
-                  },
-                  animationDuration: const Duration(milliseconds: 400),
-                  backgroundColor: colorScheme.surfaceContainerLow,
-                  elevation: 0,
-                  indicatorColor: colorScheme.primaryContainer,
-                  height: 56,
-                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                  labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                    final selected = states.contains(WidgetState.selected);
-                    return TextStyle(
-                      fontSize: 11,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                      color: selected
-                          ? colorScheme.onSurface
-                          : colorScheme.onSurfaceVariant,
-                    );
-                  }),
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.calendar_today_outlined),
-                      selectedIcon: Icon(Icons.calendar_today),
-                      label: 'Расписание',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.note_alt_outlined),
-                      selectedIcon: Icon(Icons.note_alt),
-                      label: 'Заметки',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.assessment_outlined),
-                      selectedIcon: Icon(Icons.assessment),
-                      label: 'Оценки',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.person_outline),
-                      selectedIcon: Icon(Icons.person),
-                      label: 'Профиль',
-                    ),
-                  ],
-                ),
-                // Tinted strip under the bar: matches the bar color so the
-                // home-indicator area never falls back to the window color.
-                SizedBox(height: inset),
-              ],
-            ),
-          );
+      // NavigationBar wraps its content in SafeArea itself, and its
+      // Material paints the gesture inset (iOS home indicator) with the
+      // bar color — adding padding/transform here would double the inset
+      // and float the menu high above the bottom edge.
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: currentTab,
+        onDestinationSelected: (index) {
+          HapticFeedback.lightImpact();
+          ref.read(currentTabProvider.notifier).state = index;
         },
+        animationDuration: const Duration(milliseconds: 400),
+        backgroundColor: colorScheme.surfaceContainerLow,
+        elevation: 0,
+        indicatorColor: colorScheme.primaryContainer,
+        height: 52,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color:
+                selected ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
+          );
+        }),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.calendar_today_outlined),
+            selectedIcon: Icon(Icons.calendar_today),
+            label: 'Расписание',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.note_alt_outlined),
+            selectedIcon: Icon(Icons.note_alt),
+            label: 'Заметки',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.assessment_outlined),
+            selectedIcon: Icon(Icons.assessment),
+            label: 'Оценки',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Профиль',
+          ),
+        ],
       ),
     );
   }

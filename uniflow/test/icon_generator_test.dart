@@ -1,9 +1,10 @@
 // One-off generator for the UniFlow launcher icons (iOS + Android).
-// Renders a vector design (no fonts, no external assets) with dart:ui and
-// writes every required PNG size. Run locally:
+// Composes the university glyph (tool/app_icon_glyph.png, white PNG
+// rasterized from university-svgrepo-com.svg via rsvg-convert) on the
+// brand gradient, and writes every required PNG size. Run locally:
 //   nix develop -c flutter test test/icon_generator_test.dart
 // The file is intentionally NOT part of the regular test suite in CI
-// (guarded by the env var) and can be deleted after regenerating icons.
+// (guarded by the env var).
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -13,12 +14,34 @@ import 'package:flutter_test/flutter_test.dart';
 /// Design canvas side (all coordinates below are in this space).
 const double kCanvas = 1024;
 
+/// Glyph source (white, transparent bg,1024px) rasterized from the SVG.
+const String kGlyphPath = 'tool/app_icon_glyph.png';
+
 /// Brand gradient endpoints (seed color -> indigo, matches launcher bg).
 const Color kGradStart = Color(0xFF6750A4);
 const Color kGradEnd = Color(0xFF3B46CD);
 
-/// Paints the full icon: diagonal gradient background + schedule glyph.
-void paintIcon(Canvas canvas, {required bool withBackground}) {
+/// Fraction of the canvas the glyph occupies (full-bleed icons).
+const double kGlyphScaleFull = 0.68;
+
+/// Fraction of the canvas for the adaptive-icon foreground: the visible
+/// area is a circle of66/108 ≈0.61, so stay safely inside the safe zone.
+const double kGlyphScaleAdaptive = 0.54;
+
+Future<ui.Image> loadGlyph() async {
+  final bytes = File(kGlyphPath).readAsBytesSync();
+  final codec = await ui.instantiateImageCodec(bytes);
+  final frame = await codec.getNextFrame();
+  return frame.image;
+}
+
+/// Paints the icon: optional gradient background + centered glyph.
+void paintIcon(
+  Canvas canvas,
+  ui.Image glyph, {
+  required bool withBackground,
+  double glyphScale = kGlyphScaleFull,
+}) {
   if (withBackground) {
     canvas.drawRect(
       Offset.zero & const Size(kCanvas, kCanvas),
@@ -41,39 +64,27 @@ void paintIcon(Canvas canvas, {required bool withBackground}) {
     );
   }
 
-  // "Timetable" glyph: three left-aligned stadium rows of decreasing
-  // width (centered block), the last one dimmed — a schedule at a glance.
-  const rows = <(double, double, double)>[
-    (232, 300, 0.95), // x, y, opacity (width fixed per row below)
-    (232, 464, 0.95),
-    (232, 628, 0.50),
-  ];
-  const widths = <double>[560, 560, 340];
-  for (var i = 0; i < rows.length; i++) {
-    final (x, y, opacity) = rows[i];
-    final rect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(x, y, widths[i], 96),
-      const Radius.circular(48),
-    );
-    canvas.drawRRect(
-      rect,
-      Paint()..color = Colors.white.withValues(alpha: opacity),
-    );
-  }
-
-  // Accent dot on the first row's right end (a highlighted lesson).
-  canvas.drawCircle(
-    const Offset(744, 348),
-    32,
-    Paint()..color = const Color(0xFFFFD6E7),
+  final box = kCanvas * glyphScale;
+  final dx = (kCanvas - box) / 2;
+  canvas.drawImageRect(
+    glyph,
+    Rect.fromLTWH(0, 0, glyph.width.toDouble(), glyph.height.toDouble()),
+    Rect.fromLTWH(dx, dx, box, box),
+    Paint()..filterQuality = FilterQuality.high,
   );
 }
 
-Future<void> writePng(double size, String path) async {
+Future<void> writePng(
+    double size, String path, ui.Image glyph, bool withBackground) async {
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
   canvas.scale(size / kCanvas);
-  paintIcon(canvas, withBackground: true);
+  paintIcon(
+    canvas,
+    glyph,
+    withBackground: withBackground,
+    glyphScale: withBackground ? kGlyphScaleFull : kGlyphScaleAdaptive,
+  );
   final image = await recorder.endRecording().toImage(
         size.round(),
         size.round(),
@@ -85,28 +96,14 @@ Future<void> writePng(double size, String path) async {
   stdout.writeln('  wrote $path (${size.round()}x${size.round()})');
 }
 
-Future<void> writeForeground(double size, String path) async {
-  final recorder = ui.PictureRecorder();
-  final canvas = Canvas(recorder);
-  canvas.scale(size / kCanvas);
-  paintIcon(canvas, withBackground: false);
-  final image = await recorder.endRecording().toImage(
-        size.round(),
-        size.round(),
-      );
-  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-  File(path)
-    ..createSync(recursive: true)
-    ..writeAsBytesSync(bytes!.buffer.asUint8List());
-  stdout.writeln('  wrote $path (foreground ${size.round()}px)');
-}
-
 void main() {
   test('generate launcher icons', () async {
     if (Platform.environment['UNIFLOW_GEN_ICONS'] != '1') {
       // Not a real test run: just skip silently (guarded one-off tool).
       return;
     }
+
+    final glyph = await loadGlyph();
 
     const ios = 'ios/Runner/Assets.xcassets/AppIcon.appiconset';
     const iosIcons = <String, double>{
@@ -128,7 +125,7 @@ void main() {
     };
     stdout.writeln('iOS icons:');
     for (final e in iosIcons.entries) {
-      await writePng(e.value, '$ios/${e.key}');
+      await writePng(e.value, '$ios/${e.key}', glyph, true);
     }
 
     const androidDensities = <String, double>{
@@ -142,10 +139,11 @@ void main() {
     stdout.writeln('Android icons:');
     for (final e in androidDensities.entries) {
       final dir = '$res/mipmap-${e.key}';
-      await writePng(e.value, '$dir/ic_launcher.png');
-      await writePng(e.value, '$dir/ic_launcher_round.png');
+      await writePng(e.value, '$dir/ic_launcher.png', glyph, true);
+      await writePng(e.value, '$dir/ic_launcher_round.png', glyph, true);
     }
     // Adaptive icon foreground (108dp canvas, glyph fits the safe zone).
-    await writeForeground(432, '$res/drawable/ic_launcher_foreground.png');
+    await writePng(
+        432, '$res/drawable/ic_launcher_foreground.png', glyph, false);
   }, timeout: const Timeout(Duration(minutes: 5)));
 }
