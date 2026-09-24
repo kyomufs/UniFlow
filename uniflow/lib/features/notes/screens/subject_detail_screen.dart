@@ -1083,6 +1083,15 @@ class _TaskSheetState extends State<_TaskSheet> {
     super.dispose();
   }
 
+  /// Compact density + tighter side padding so full Russian labels
+  /// ("К выполнению", "Средний") fit three segments on a phone width.
+  ButtonStyle _segmentButtonStyle() => ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        padding: WidgetStateProperty.all(
+          const EdgeInsets.symmetric(horizontal: 8),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1125,7 +1134,9 @@ class _TaskSheetState extends State<_TaskSheet> {
             const Gap(16),
 
             // Status — full-width segmented buttons (easier to tap than
-            // tiny chips; icon + label shows state at a glance)
+            // tiny chips). Labels lead: segments share the row width, so
+            // a FittedBox scales long Russian words down instead of
+            // clipping them ("К вы | В выпо" bug).
             Text('Статус',
                 style: theme.textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.w600)),
@@ -1134,25 +1145,21 @@ class _TaskSheetState extends State<_TaskSheet> {
               segments: [
                 ButtonSegment(
                   value: TaskStatus.todo,
-                  icon: const Icon(Icons.radio_button_unchecked, size: 18),
-                  label:
-                      Text(taskStatusDisplayName(TaskStatus.todo), maxLines: 1),
+                  label: _SegmentLabel(taskStatusDisplayName(TaskStatus.todo)),
                 ),
                 ButtonSegment(
                   value: TaskStatus.inProgress,
-                  icon: const Icon(Icons.play_circle_outline, size: 18),
-                  label: Text(taskStatusDisplayName(TaskStatus.inProgress),
-                      maxLines: 1),
+                  label: _SegmentLabel(
+                      taskStatusDisplayName(TaskStatus.inProgress)),
                 ),
                 ButtonSegment(
                   value: TaskStatus.done,
-                  icon: const Icon(Icons.check_circle_outline, size: 18),
-                  label:
-                      Text(taskStatusDisplayName(TaskStatus.done), maxLines: 1),
+                  label: _SegmentLabel(taskStatusDisplayName(TaskStatus.done)),
                 ),
               ],
               selected: {_status},
               showSelectedIcon: false,
+              style: _segmentButtonStyle(),
               onSelectionChanged: (s) => setState(() => _status = s.first),
             ),
             const Gap(16),
@@ -1166,26 +1173,23 @@ class _TaskSheetState extends State<_TaskSheet> {
               segments: [
                 ButtonSegment(
                   value: TaskPriority.low,
-                  icon: const Icon(Icons.arrow_downward, size: 18),
-                  label: Text(taskPriorityDisplayName(TaskPriority.low),
-                      maxLines: 1),
+                  label:
+                      _SegmentLabel(taskPriorityDisplayName(TaskPriority.low)),
                 ),
                 ButtonSegment(
                   value: TaskPriority.medium,
-                  icon: const Icon(Icons.drag_handle, size: 18),
-                  label: Text(taskPriorityDisplayName(TaskPriority.medium),
-                      maxLines: 1),
+                  label: _SegmentLabel(
+                      taskPriorityDisplayName(TaskPriority.medium)),
                 ),
                 ButtonSegment(
                   value: TaskPriority.high,
-                  icon: const Icon(Icons.priority_high, size: 18),
-                  label: Text(taskPriorityDisplayName(TaskPriority.high),
-                      maxLines: 1),
+                  label:
+                      _SegmentLabel(taskPriorityDisplayName(TaskPriority.high)),
                 ),
               ],
               selected: {_priority},
               showSelectedIcon: false,
-              style: ButtonStyle(
+              style: _segmentButtonStyle().copyWith(
                 foregroundColor: WidgetStateProperty.resolveWith((states) {
                   if (!states.contains(WidgetState.selected)) return null;
                   final scheme = Theme.of(context).colorScheme;
@@ -1415,6 +1419,31 @@ class _TaskSheetState extends State<_TaskSheet> {
           },
         );
       },
+    );
+  }
+}
+
+// ============================================================
+// Segment label — scales instead of clipping
+// ============================================================
+
+/// Segment label that scales the text down when the segment is narrower
+/// than the full word, instead of clipping it mid-letter.
+class _SegmentLabel extends StatelessWidget {
+  final String text;
+
+  const _SegmentLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.clip,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      ),
     );
   }
 }

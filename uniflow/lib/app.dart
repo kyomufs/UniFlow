@@ -99,67 +99,66 @@ class _MainShellState extends ConsumerState<MainShell> {
       ),
       // Solid bar, no floating rounded container: full-width surface color
       // with a tonal indicator pill, like Gmail's bottom navigation.
-      // The colored wrapper extends the bar's surface behind the gesture
-      // pill (edge-to-edge) so no foreign-colored strip remains at the bottom.
+      // One tinted block holds the bar and the system gesture inset below
+      // it, so the color is continuous to the screen edge: no white strip
+      // above the bar and no floating gap under it (iOS home indicator).
       bottomNavigationBar: Builder(
         builder: (context) {
-          // Cover the FULL system inset with the bar color so the strip
-          // below the menu never falls back to the white window background
-          // (it did in the light theme when only half the inset was paid).
           final inset = MediaQuery.of(context).viewPadding.bottom;
           return Container(
             color: colorScheme.surfaceContainerLow,
-            padding: EdgeInsets.only(bottom: inset),
-            child: Transform.translate(
-              // Keep the same visual position as before: push the bar down
-              // by half the inset (+6 nudge) so it still sits low while the
-              // tinted background now reaches the screen edge.
-              offset: Offset(0, inset / 2 + 6),
-              child: NavigationBar(
-                selectedIndex: currentTab,
-                onDestinationSelected: (index) {
-                  HapticFeedback.lightImpact();
-                  ref.read(currentTabProvider.notifier).state = index;
-                },
-                animationDuration: const Duration(milliseconds: 400),
-                backgroundColor: colorScheme.surfaceContainerLow,
-                elevation: 0,
-                indicatorColor: colorScheme.primaryContainer,
-                height: 56,
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                  final selected = states.contains(WidgetState.selected);
-                  return TextStyle(
-                    fontSize: 11,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    color: selected
-                        ? colorScheme.onSurface
-                        : colorScheme.onSurfaceVariant,
-                  );
-                }),
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.calendar_today_outlined),
-                    selectedIcon: Icon(Icons.calendar_today),
-                    label: 'Расписание',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.note_alt_outlined),
-                    selectedIcon: Icon(Icons.note_alt),
-                    label: 'Заметки',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.assessment_outlined),
-                    selectedIcon: Icon(Icons.assessment),
-                    label: 'Оценки',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline),
-                    selectedIcon: Icon(Icons.person),
-                    label: 'Профиль',
-                  ),
-                ],
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                NavigationBar(
+                  selectedIndex: currentTab,
+                  onDestinationSelected: (index) {
+                    HapticFeedback.lightImpact();
+                    ref.read(currentTabProvider.notifier).state = index;
+                  },
+                  animationDuration: const Duration(milliseconds: 400),
+                  backgroundColor: colorScheme.surfaceContainerLow,
+                  elevation: 0,
+                  indicatorColor: colorScheme.primaryContainer,
+                  height: 56,
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                  labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                    final selected = states.contains(WidgetState.selected);
+                    return TextStyle(
+                      fontSize: 11,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected
+                          ? colorScheme.onSurface
+                          : colorScheme.onSurfaceVariant,
+                    );
+                  }),
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.calendar_today_outlined),
+                      selectedIcon: Icon(Icons.calendar_today),
+                      label: 'Расписание',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.note_alt_outlined),
+                      selectedIcon: Icon(Icons.note_alt),
+                      label: 'Заметки',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.assessment_outlined),
+                      selectedIcon: Icon(Icons.assessment),
+                      label: 'Оценки',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.person_outline),
+                      selectedIcon: Icon(Icons.person),
+                      label: 'Профиль',
+                    ),
+                  ],
+                ),
+                // Tinted strip under the bar: matches the bar color so the
+                // home-indicator area never falls back to the window color.
+                SizedBox(height: inset),
+              ],
             ),
           );
         },

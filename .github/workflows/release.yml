@@ -89,10 +89,20 @@ jobs:
         with:
           name: app-release-ipa
 
+      # GitHub shows artifacts under their file name: ship human-readable
+      # names (UniFlow-v1.0.0.apk) instead of the Flutter default
+      # "app-release.apk". Artifacts land in the workspace root, while
+      # run steps default to uniflow/ — override for this step.
+      - name: Name release assets
+        working-directory: ${{ github.workspace }}
+        run: |
+          mv app-release.apk "UniFlow-${GITHUB_REF_NAME}.apk"
+          mv UniFlow.ipa "UniFlow-${GITHUB_REF_NAME}.ipa"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            app-release.apk
-            UniFlow.ipa
+            UniFlow-*.apk
+            UniFlow-*.ipa
           generate_release_notes: true
