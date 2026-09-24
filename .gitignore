@@ -1,0 +1,6 @@
+# Vision toolkit scratch data (session-local)
+.dsh-vision-toolkit/
+
+# OS / editor noise
+.DS_Store
+*.log

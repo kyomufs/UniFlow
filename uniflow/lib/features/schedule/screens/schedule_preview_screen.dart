@@ -1,0 +1,262 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gap/gap.dart';
+import 'package:uniflow/core/models/schedule.dart';
+import 'package:uniflow/core/services/schedule_service.dart';
+import 'package:uniflow/core/utils/week_utils.dart';
+import 'package:uniflow/features/schedule/providers/schedule_provider.dart';
+import 'package:uniflow/features/schedule/widgets/day_schedule.dart';
+import 'package:uniflow/features/schedule/widgets/lesson_detail_sheet.dart';
+import 'package:uniflow/shared/widgets/loading_indicator.dart';
+
+/// Read-only schedule preview for any search value (group, teacher, auditorium).
+/// Does NOT change the user's persistent group.
+class SchedulePreviewScreen extends ConsumerStatefulWidget {
+  final String searchValue;
+  final String title;
+
+  const SchedulePreviewScreen({
+    super.key,
+    required this.searchValue,
+    required this.title,
+  });
+
+  @override
+  ConsumerState<SchedulePreviewScreen> createState() =>
+      _SchedulePreviewScreenState();
+}
+
+class _SchedulePreviewScreenState extends ConsumerState<SchedulePreviewScreen> {
+  List<ScheduleItem> _items = [];
+  bool _isLoading = true;
+  String? _error;
+  late DateTime _weekStart;
+
+  @override
+  void initState() {
+    super.initState();
+    _weekStart = getCurrentWeekStart();
+    _loadSchedule();
+  }
+
+  Future<void> _loadSchedule() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final service = ref.read(scheduleServiceProvider);
+      final result = await service.getSchedule(widget.searchValue);
+      if (mounted) {
+        setState(() {
+          _items = result.items;
+          _error = result.error;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  List<ScheduleItem> get _weekItems {
+    return filterByWeek(
+      _items,
+      _weekStart,
+      (item) => item.parsedDate,
+    );
+  }
+
+  Map<DateTime, List<ScheduleItem>> get _weekByDay {
+    final map = <DateTime, List<ScheduleItem>>{};
+    for (final item in _weekItems) {
+      final date = item.parsedDate;
+      final dayKey = DateTime(date.year, date.month, date.day);
+      map[dayKey] = [...(map[dayKey] ?? []), item];
+    }
+    final sortedKeys = map.keys.toList()..sort();
+    return {for (final key in sortedKeys) key: map[key]!};
+  }
+
+  WeekInfo get _weekInfo => getWeekInfo(_weekStart);
+  bool get _isCurrentWeek => _weekStart == getCurrentWeekStart();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final notifier = ref.read(scheduleScreenProvider.notifier);
+    final isFav = notifier.isFavoriteGroup(widget.searchValue);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            icon: Icon(isFav ? Icons.star : Icons.star_border),
+            color: isFav ? colorScheme.primary : null,
+            onPressed: () {
+              if (isFav) {
+                notifier.removeFavoriteGroup(widget.searchValue);
+              } else {
+                notifier.addFavoriteGroup(widget.searchValue);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content:
+                        Text('«${widget.searchValue}» добавлена в избранное'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+              setState(() {});
+            },
+            tooltip: isFav ? 'Убрать из избранного' : 'Добавить в избранное',
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadSchedule,
+            tooltip: 'Обновить',
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const LoadingIndicator(message: 'Загрузка расписания...')
+          : _error != null
+              ? _buildError(colorScheme, theme)
+              : _items.isEmpty
+                  ? _buildEmpty(colorScheme, theme)
+                  : _buildContent(colorScheme, theme),
+    );
+  }
+
+  Widget _buildContent(ColorScheme colorScheme, ThemeData theme) {
+    final allDays = List.generate(6, (i) {
+      final day = _weekStart.add(Duration(days: i));
+      return DateTime(day.year, day.month, day.day);
+    });
+
+    return Column(
+      children: [
+        // Week navigation
+        Container(
+          margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: _isCurrentWeek
+                ? colorScheme.primaryContainer.withValues(alpha: 0.5)
+                : colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() {
+                  _weekStart = getPrevWeekStart(_weekStart);
+                }),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      'Неделя ${_weekInfo.weekNumber}',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      '${_weekInfo.dateRangeShort} (${_weekInfo.isEven ? 'чётная' : 'нечётная'})',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => setState(() {
+                  _weekStart = getNextWeekStart(_weekStart);
+                }),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+        ),
+        const Gap(8),
+        // Schedule list
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(bottom: 80),
+            itemCount: allDays.length,
+            itemBuilder: (context, index) {
+              final day = allDays[index];
+              final lessons = _weekByDay[day] ?? [];
+              final now = DateTime.now();
+              final isToday = day.year == now.year &&
+                  day.month == now.month &&
+                  day.day == now.day;
+
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: DaySchedule(
+                  date: day,
+                  lessons: lessons,
+                  isToday: isToday,
+                  onLessonClick: (lesson) =>
+                      showLessonDetailSheet(context, lesson),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildError(ColorScheme colorScheme, ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline,
+              size: 64, color: colorScheme.error.withValues(alpha: 0.5)),
+          const Gap(16),
+          Text('Ошибка загрузки', style: theme.textTheme.titleMedium),
+          const Gap(8),
+          Text(_error!,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge
+                  ?.copyWith(color: colorScheme.onSurfaceVariant)),
+          const Gap(16),
+          FilledButton.tonal(
+            onPressed: _loadSchedule,
+            child: const Text('Повторить'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmpty(ColorScheme colorScheme, ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.event_busy,
+              size: 64, color: colorScheme.primary.withValues(alpha: 0.3)),
+          const Gap(16),
+          Text('Нет занятий на эту неделю',
+              style: theme.textTheme.bodyLarge
+                  ?.copyWith(color: colorScheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+}

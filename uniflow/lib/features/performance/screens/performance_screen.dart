@@ -1,0 +1,366 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gap/gap.dart';
+import 'package:uniflow/core/api/tulsu_api.dart';
+import 'package:uniflow/app.dart';
+import 'package:uniflow/features/performance/providers/performance_provider.dart';
+
+/// Performance (academic marks) screen
+class PerformanceScreen extends ConsumerWidget {
+  const PerformanceScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final state = ref.watch(performanceProvider);
+    final isConfigured = ref.watch(isPerformanceConfiguredProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Успеваемость'),
+        centerTitle: false,
+        actions: [
+          if (isConfigured)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () async {
+                final msg =
+                    await ref.read(performanceProvider.notifier).loadMarks();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(msg)),
+                );
+              },
+              tooltip: 'Обновить',
+            ),
+        ],
+      ),
+      body: !isConfigured
+          ? _buildNotConfigured(context, ref, colorScheme, theme)
+          : state.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : state.error != null
+                  ? _buildError(context, ref, state, colorScheme, theme)
+                  : state.marks.isEmpty
+                      ? _buildEmpty(context, ref, colorScheme, theme)
+                      : _buildMarksView(context, ref, state),
+    );
+  }
+
+  Widget _buildNotConfigured(BuildContext context, WidgetRef ref,
+      ColorScheme colorScheme, ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.school_outlined,
+                size: 80, color: colorScheme.primary.withValues(alpha: 0.3)),
+            const Gap(24),
+            Text('Настройте профиль',
+                style: theme.textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const Gap(8),
+            Text(
+              'Для просмотра успеваемости укажите\nномер зачётки и подгруппу в профиле',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+            const Gap(32),
+            FilledButton.icon(
+              onPressed: () => ref.read(currentTabProvider.notifier).state = 3,
+              icon: const Icon(Icons.person),
+              label: const Text('Открыть профиль'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildError(BuildContext context, WidgetRef ref,
+      PerformanceState state, ColorScheme colorScheme, ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline,
+                size: 64, color: colorScheme.error.withValues(alpha: 0.5)),
+            const Gap(16),
+            Text(state.error!,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: colorScheme.onSurfaceVariant)),
+            const Gap(16),
+            FilledButton.tonal(
+              onPressed: () => ref.read(currentTabProvider.notifier).state = 3,
+              child: const Text('Настроить профиль'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty(BuildContext context, WidgetRef ref,
+      ColorScheme colorScheme, ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.event_busy,
+              size: 64, color: colorScheme.primary.withValues(alpha: 0.3)),
+          const Gap(16),
+          Text('Нет данных об успеваемости',
+              style: theme.textTheme.bodyLarge
+                  ?.copyWith(color: colorScheme.onSurfaceVariant)),
+          const Gap(16),
+          FilledButton.tonal(
+            onPressed: () async {
+              final msg =
+                  await ref.read(performanceProvider.notifier).loadMarks();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(msg)));
+            },
+            child: const Text('Загрузить'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMarksView(
+      BuildContext context, WidgetRef ref, PerformanceState state) {
+    final semesters = state.availableSemesters;
+
+    return Column(
+      children: [
+        // Semester tabs — show as 1, 2, 3... (sequential)
+        if (semesters.isNotEmpty)
+          SizedBox(
+            height: 56,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              scrollDirection: Axis.horizontal,
+              itemCount: semesters.length,
+              separatorBuilder: (_, __) => const Gap(8),
+              itemBuilder: (context, index) {
+                final sem = semesters[index];
+                final isSelected = state.selectedSemester == sem;
+                // Map actual term number to display: "1 семестр", "2 семестр"...
+                final displayIndex = index + 1;
+                return FilterChip(
+                  label: Text('$displayIndex семестр'),
+                  selected: isSelected,
+                  onSelected: (_) => ref
+                      .read(performanceProvider.notifier)
+                      .selectSemester(sem),
+                );
+              },
+            ),
+          ),
+
+        // Stats row
+        _StatsRow(
+          total: state.totalSubjects,
+          attested: state.attestedCount,
+          notAttested: state.notAttestedCount,
+        ),
+
+        const Divider(height: 1),
+
+        // Marks list
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.only(bottom: 100),
+            itemCount: state.semesterMarks.length,
+            separatorBuilder: (_, __) =>
+                const Divider(height: 1, indent: 16, endIndent: 16),
+            itemBuilder: (context, index) {
+              return _MarkTile(item: state.semesterMarks[index]);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// Stats Row
+// ============================================================
+class _StatsRow extends StatelessWidget {
+  final int total;
+  final int attested;
+  final int notAttested;
+
+  const _StatsRow({
+    required this.total,
+    required this.attested,
+    required this.notAttested,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: colorScheme.surfaceContainerLow,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _StatItem(
+            label: 'Всего',
+            value: '$total',
+            color: colorScheme.onSurface,
+          ),
+          _StatItem(
+            label: 'Аттестовано',
+            value: '$attested',
+            color: colorScheme.primary,
+          ),
+          _StatItem(
+            label: 'Не аттестовано',
+            value: '$notAttested',
+            color: notAttested > 0
+                ? colorScheme.error
+                : colorScheme.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatItem({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(value,
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700, color: color)),
+        const Gap(2),
+        Text(label,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// Mark Tile
+// ============================================================
+class _MarkTile extends StatelessWidget {
+  final MarksItem item;
+
+  const _MarkTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    // MD3-compliant mark colors using color scheme
+    Color markColor;
+    if (item.markTitle.isEmpty) {
+      markColor = colorScheme.onSurfaceVariant;
+    } else if (item.markTitle == 'Отлично' || item.markTitle == 'Зачет') {
+      markColor = colorScheme.primary;
+    } else if (item.markTitle == 'Хорошо') {
+      markColor = colorScheme.tertiary;
+    } else if (item.markTitle == 'Удовлетворительно' ||
+        item.markTitle == 'Незачет') {
+      markColor = colorScheme.secondary;
+    } else if (item.markTitle == 'Не аттестован') {
+      markColor = colorScheme.error;
+    } else {
+      markColor = colorScheme.onSurface;
+    }
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: markColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: item.mark.isNotEmpty
+              ? Text(
+                  item.mark,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: markColor,
+                  ),
+                )
+              : Icon(Icons.hourglass_empty,
+                  size: 20, color: colorScheme.onSurfaceVariant),
+        ),
+      ),
+      title: Text(
+        item.discipline,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: item.teacherMark.isNotEmpty
+          ? Text(
+              item.teacherMark,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )
+          : null,
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (item.markTitle.isNotEmpty)
+            Text(
+              item.markTitle,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: markColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (item.recredit)
+            Text(
+              'перезачёт',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.tertiary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
