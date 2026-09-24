@@ -79,11 +79,12 @@ class UpdateService {
     return _installer.invokeMethod<void>('installApk', path);
   }
 
-  /// Compares dotted numeric versions ("1.10.0" > "1.2.9"); non-numeric
-  /// segments fall back to zero. Returns positive when [a] is newer than [b].
+  /// Compares dotted numeric versions ("1.10.0" > "1.2.9"). Each
+  /// segment contributes its leading digits ("1-beta" counts as 1,
+  /// "rc1" as 0). Returns positive when [a] is newer than [b].
   static int compareVersions(String a, String b) {
-    final pa = a.split('.').map((s) => int.tryParse(s) ?? 0).toList();
-    final pb = b.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    final pa = _segments(a);
+    final pb = _segments(b);
     final length = pa.length > pb.length ? pa.length : pb.length;
     for (var i = 0; i < length; i++) {
       final va = i < pa.length ? pa[i] : 0;
@@ -91,5 +92,12 @@ class UpdateService {
       if (va != vb) return va - vb;
     }
     return 0;
+  }
+
+  static List<int> _segments(String version) {
+    return version.split('.').map((segment) {
+      final match = RegExp(r'^\d+').firstMatch(segment);
+      return match == null ? 0 : int.parse(match.group(0)!);
+    }).toList();
   }
 }

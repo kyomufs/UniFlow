@@ -21,9 +21,11 @@
         {
           "version": "1.0.0",
           "date": "2026-09-24",
-          "downloadURL": "https://github.com/kyomufs/UniFlow/releases/download/v1.0.0/UniFlow-v1.0.0.ipa"
+          "downloadURL": "https://github.com/kyomufs/UniFlow/releases/download/v1.0.0/UniFlow-v1.0.0.ipa",
+          "size": 9133409
         }
-      ]
+      ],
+      "size": 9133409
     }
   ],
   "news": []
