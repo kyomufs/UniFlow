@@ -353,21 +353,36 @@ class _AddSubjectSheetState extends ConsumerState<_AddSubjectSheet> {
           ),
           const Gap(16),
 
-          // Toggle: manual or from schedule
+          // Toggle: manual or from schedule. FittedBox labels scale down
+          // instead of clipping on narrow dialogs (same rule as the task
+          // sheet's status/priority segments).
           SegmentedButton<bool>(
             segments: const [
               ButtonSegment(
                 value: false,
-                label: Text('Вручную'),
-                icon: Icon(Icons.edit),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('Вручную', maxLines: 1),
+                ),
+                icon: Icon(Icons.edit, size: 18),
               ),
               ButtonSegment(
                 value: true,
-                label: Text('Из расписания'),
-                icon: Icon(Icons.school),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('Из расписания', maxLines: 1),
+                ),
+                icon: Icon(Icons.school, size: 18),
               ),
             ],
             selected: {_fromSchedule},
+            showSelectedIcon: false,
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              padding: WidgetStateProperty.all(
+                const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
             onSelectionChanged: (set) {
               setState(() {
                 _fromSchedule = set.first;
