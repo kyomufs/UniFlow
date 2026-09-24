@@ -209,6 +209,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   ) {
     final schedule = state.schedule;
 
+    // Stale-while-revalidate: when a local copy is already on screen,
+    // keep it visible during a background sync and only show the slim
+    // progress bar; the full-screen spinner is for a cold start with
+    // nothing to display yet.
+    final hasVisibleContent =
+        schedule.error == null && schedule.items.isNotEmpty;
+
     return Column(
       children: [
         _GroupBadgeBar(state: state),
@@ -219,8 +226,10 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           onPrevWeek: () =>
               ref.read(scheduleScreenProvider.notifier).goToPrevWeek(),
         ),
+        if (schedule.isLoading && hasVisibleContent)
+          const LinearProgressIndicator(minHeight: 2),
         Expanded(
-          child: schedule.isLoading
+          child: schedule.isLoading && schedule.items.isEmpty
               ? const LoadingIndicator(message: 'Загрузка расписания...')
               : schedule.error != null
                   ? _buildError(

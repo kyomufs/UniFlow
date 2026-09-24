@@ -200,39 +200,66 @@ class ScheduleScreenNotifier extends StateNotifier<ScheduleScreenState> {
           journal.any((r) => seenAt == null || r.detectedAt.isAfter(seenAt)),
     );
     if (myGroup != null) {
-      // Check connectivity first
-      final isOnline = await _connectivity.checkConnectivity();
       // Fingerprint of the schedule the user last saw (for change alerts).
       final previousFingerprint = _storage.getScheduleFingerprint();
+      // Stale-while-revalidate: paint the local copy synchronously,
+      // BEFORE the connectivity probe — a slow network must never blank
+      // an already-known schedule. The sync below replaces it in place.
+      final hadLocalCopy = _applyCachedSchedule(myGroup);
+      if (!hadLocalCopy) {
+        // Nothing local: enter the loading state right away so the
+        // empty view does not flash while the connectivity probe runs.
+        state = state.copyWith(
+          schedule: state.schedule.copyWith(
+            searchValue: myGroup,
+            isLoading: true,
+          ),
+        );
+      }
+      final isOnline = await _connectivity.checkConnectivity();
       if (isOnline) {
-        // Online: load from API, then cache
+        // Sync with the API: fresh data replaces the painted copy.
         await loadSchedule(myGroup);
         // Silently compare with the last seen version and alert on changes.
         await _checkForScheduleChanges(myGroup, previousFingerprint);
-      } else {
-        // Offline: try to load from cache
-        final cached = _storage.getCachedSchedule(myGroup);
-        if (cached != null && cached.isValid) {
-          state = state.copyWith(
-            schedule: ScheduleState(
-              searchValue: myGroup,
-              dateRange: DateTimeRange(
-                start: cached.data.dateRange.minDate,
-                end: cached.data.dateRange.maxDate,
-              ),
-              items: cached.data.items,
-            ),
-          );
-        } else {
-          state = state.copyWith(
-            schedule: state.schedule.copyWith(
-              searchValue: myGroup,
-              error: 'Нет подключения к интернету',
-            ),
-          );
-        }
+      } else if (!hadLocalCopy) {
+        state = state.copyWith(
+          schedule: state.schedule.copyWith(
+            searchValue: myGroup,
+            isLoading: false,
+            error: 'Нет подключения к интернету',
+          ),
+        );
       }
+      // Offline with a painted local copy: keep showing it silently —
+      // a stale timetable beats an error screen; pull-to-refresh still
+      // reports "no internet" explicitly.
     }
+  }
+
+  /// Paints the cached snapshot for [searchValue] into the state without
+  /// any loading flag (the network revalidation runs separately).
+  /// Returns true when a non-empty local copy is now shown. The snapshot
+  /// is shown regardless of its age: stale content beats a blank screen
+  /// when the revalidation cannot run.
+  bool _applyCachedSchedule(String searchValue) {
+    final cached = _storage.getCachedSchedule(searchValue);
+    if (cached == null || cached.data.items.isEmpty) return false;
+    state = state.copyWith(schedule: _stateFromCache(searchValue, cached));
+    return true;
+  }
+
+  /// Shared shape of a schedule state served from the local snapshot.
+  static ScheduleState _stateFromCache(
+      String searchValue, CachedSchedule cached) {
+    return ScheduleState(
+      searchValue: searchValue,
+      dateRange: DateTimeRange(
+        start: cached.data.dateRange.minDate,
+        end: cached.data.dateRange.maxDate,
+      ),
+      items: cached.data.items,
+    );
   }
 
   /// Demo mode: generated timetable + seeded in-memory change journal.
@@ -640,16 +667,8 @@ class ScheduleScreenNotifier extends StateNotifier<ScheduleScreenState> {
       if (result.error != null) {
         final cached = _storage.getCachedSchedule(searchValue);
         if (cached != null && cached.isValid) {
-          state = state.copyWith(
-            schedule: ScheduleState(
-              searchValue: searchValue,
-              dateRange: DateTimeRange(
-                start: cached.data.dateRange.minDate,
-                end: cached.data.dateRange.maxDate,
-              ),
-              items: cached.data.items,
-            ),
-          );
+          state =
+              state.copyWith(schedule: _stateFromCache(searchValue, cached));
           return await _fallbackNote(result.error!);
         }
         state = state.copyWith(schedule: result);
@@ -661,16 +680,7 @@ class ScheduleScreenNotifier extends StateNotifier<ScheduleScreenState> {
       // Unexpected error — try cache
       final cached = _storage.getCachedSchedule(searchValue);
       if (cached != null && cached.isValid) {
-        state = state.copyWith(
-          schedule: ScheduleState(
-            searchValue: searchValue,
-            dateRange: DateTimeRange(
-              start: cached.data.dateRange.minDate,
-              end: cached.data.dateRange.maxDate,
-            ),
-            items: cached.data.items,
-          ),
-        );
+        state = state.copyWith(schedule: _stateFromCache(searchValue, cached));
         return await _fallbackNote(ErrorMessages.fromException(e));
       }
       state = state.copyWith(

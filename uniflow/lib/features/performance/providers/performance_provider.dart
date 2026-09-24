@@ -104,6 +104,16 @@ class PerformanceNotifier extends StateNotifier<PerformanceState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
 
+    // Stale-while-revalidate: paint the local snapshot first (this runs
+    // synchronously during construction, before any network wait), then
+    // sync with the API and swap the data in place. Slow internet keeps
+    // the existing marks on screen instead of blanking them.
+    final cached = _storage.getCachedMarks(studentId: studentId, group: group);
+    if (state.marks.isEmpty && cached != null && cached.isNotEmpty) {
+      state = state.copyWith(marks: cached, clearError: true);
+      _autoSelectSemester();
+    }
+
     // No connectivity gate: a stale cached "offline" verdict must never
     // block a refresh — hit the API directly, then fall back to the cache.
     try {
@@ -118,10 +128,8 @@ class PerformanceNotifier extends StateNotifier<PerformanceState> {
       _autoSelectSemester();
       return 'Оценки обновлены';
     } catch (e) {
-      // Offline or API failure: serve the cached snapshot instead of
+      // Offline or API failure: keep serving the snapshot instead of
       // wiping the screen, so marks survive network drops.
-      final cached =
-          _storage.getCachedMarks(studentId: studentId, group: group);
       if (!mounted) return 'Не удалось обновить оценки';
       final servedCache = cached != null && cached.isNotEmpty;
       final msg = await _failureMessage(e, servedCache: servedCache);

@@ -38,13 +38,24 @@ class PerformanceScreen extends ConsumerWidget {
       ),
       body: !isConfigured
           ? _buildNotConfigured(context, ref, colorScheme, theme)
-          : state.isLoading
+          // Stale-while-revalidate: cached marks stay visible during a
+          // background sync (slim progress bar on top); the full spinner
+          // only appears when there is nothing local to show yet.
+          : state.isLoading && state.marks.isEmpty
               ? const Center(child: CircularProgressIndicator())
               : state.error != null
                   ? _buildError(context, ref, state, colorScheme, theme)
                   : state.marks.isEmpty
                       ? _buildEmpty(context, ref, colorScheme, theme)
-                      : _buildMarksView(context, ref, state),
+                      : Column(
+                          children: [
+                            if (state.isLoading)
+                              const LinearProgressIndicator(minHeight: 2),
+                            Expanded(
+                              child: _buildMarksView(context, ref, state),
+                            ),
+                          ],
+                        ),
     );
   }
 
